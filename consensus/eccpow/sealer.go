@@ -123,7 +123,16 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 			defer pend.Done()
 			//ecc.mine(block, id, nonce, abort, locals)
 			if chain.Config().IsSeoul(block.Header().Number) {
-				ecc.mine_seoul(block, id, nonce, abort, locals)
+				//ecc.mine_seoul(block, id, nonce, abort, locals)
+				////////
+				header := block.Header()
+				parameters, _ := setParameters_Seoul(header)
+				H := generateH(parameters)
+				colInRow, rowInCol := generateQ(parameters, H)
+				hash := ecc.SealHash(header).Bytes()
+
+				ecc.mine_seoul_gpu(block, hash, id, nonce, abort, locals, parameters.n, parameters.m, parameters.wc, parameters.wr, parameters.seed, colInRow, rowInCol, H)
+				////////
 			} else {
 				ecc.mine(block, id, nonce, abort, locals)
 			}
@@ -256,7 +265,6 @@ func (ecc *ECC) mine_seoul(block *types.Block, id int, seed uint64, abort chan s
 	logger.Trace("Started ecc search for new nonces", "seed", seed)
 
 	parameters, _ := setParameters_Seoul(header)
-	//fmt.Println(parameters)
 	H := generateH(parameters)
 	colInRow, rowInCol := generateQ(parameters, H)
 
@@ -282,25 +290,14 @@ search:
 			copy(digest, hash)
 			binary.LittleEndian.PutUint64(digest[32:], nonce)
 			digest = crypto.Keccak512(digest)
-			//fmt.Printf("nonce: %v\n", digest)
 
 			goRoutineHashVector := generateHv(parameters, digest)
 			goRoutineHashVector, goRoutineOutputWord, _ := OptimizedDecodingSeoul(parameters, goRoutineHashVector, H, rowInCol, colInRow)
 
 			flag, _ := MakeDecision_Seoul(header, colInRow, goRoutineOutputWord)
-			//fmt.Printf("nonce: %v\n", nonce)
-			//fmt.Printf("nonce: %v\n", weight)
 
 			if flag == true {
-				//hashVector := goRoutineHashVector
 				outputWord := goRoutineOutputWord
-
-				//level := SearchLevel_Seoul(header.Difficulty)
-				/*fmt.Printf("level: %v\n", level)
-				fmt.Printf("total attempts: %v\n", total_attempts)
-				fmt.Printf("hashrate: %v\n", ecc.Hashrate())
-				fmt.Printf("Codeword found with nonce = %d\n", nonce)
-				fmt.Printf("Codeword : %d\n", outputWord)*/
 
 				header = types.CopyHeader(header)
 				header.CodeLength = uint64(parameters.n)
@@ -322,8 +319,6 @@ search:
 				}
 				header.Codeword = make([]byte, len(codeword))
 				copy(header.Codeword, codeword)
-				//fmt.Printf("header: %v\n", header)
-				//fmt.Printf("header Codeword : %v\n", header.Codeword)
 
 				// Seal and return a block (if still needed)
 				select {
@@ -331,6 +326,83 @@ search:
 					logger.Trace("ecc nonce found and reported", "LDPCNonce", nonce)
 				case <-abort:
 					logger.Trace("ecc nonce found but discarded", "LDPCNonce", nonce)
+				}
+				break search
+			}
+			nonce++
+		}
+	}
+}
+
+func (ecc *ECC) mine_seoul_gpu(block *types.Block, hash []byte, id int, seed uint64, abort chan struct{}, found chan *types.Block, param_n int, param_m int, param_wc int, param_wr int, param_seed int, colInRow [][]int, rowInCol [][]int, H [][]int) {
+	// Extract some data from the header
+	var (
+		header = block.Header()
+	)
+	// Start generating random nonces until we abort or find a good one
+	var (
+		total_attempts = int64(0)
+		attempts       = int64(0)
+		nonce          = seed
+	)
+
+search:
+	for {
+		select {
+		case <-abort:
+			// Mining terminated, update stats and abort
+			ecc.hashrate.Mark(attempts)
+			break search
+
+		default:
+			// We don't have to update hash rate on every nonce, so update after after 2^X nonces
+			total_attempts = total_attempts + 1
+			attempts = attempts + 1
+			if (attempts % (1 << 15)) == 0 {
+				ecc.hashrate.Mark(attempts)
+				attempts = 0
+			}
+
+			digest := make([]byte, 40)
+			copy(digest, hash)
+			binary.LittleEndian.PutUint64(digest[32:], nonce)
+			digest = crypto.Keccak512(digest)
+
+			goRoutineHashVector := generateHv_gpu(param_n, digest)
+			goRoutineHashVector, goRoutineOutputWord, _ := OptimizedDecodingSeoul_gpu(param_n, param_m, param_wc, param_wr, param_seed, goRoutineHashVector, rowInCol, colInRow)
+
+			flag, _ := MakeDecision_Seoul_gpu(param_n, param_m, param_wc, param_wr, param_seed, colInRow, goRoutineOutputWord)
+
+			if flag == true {
+				outputWord := goRoutineOutputWord
+
+				header = types.CopyHeader(header)
+				header.CodeLength = uint64(param_n)
+				header.MixDigest = common.BytesToHash(digest)
+				header.Nonce = types.EncodeNonce(nonce)
+
+				//convert codeword
+				var codeword []byte
+				var codeVal byte
+				for i, v := range outputWord {
+					codeVal |= byte(v) << (7 - i%8)
+					if i%8 == 7 {
+						codeword = append(codeword, codeVal)
+						codeVal = 0
+					}
+				}
+				if len(outputWord)%8 != 0 {
+					codeword = append(codeword, codeVal)
+				}
+				header.Codeword = make([]byte, len(codeword))
+				copy(header.Codeword, codeword)
+
+				// Seal and return a block (if still needed)
+				select {
+				case found <- block.WithSeal(header):
+					//logger.Trace("ecc nonce found and reported", "LDPCNonce", nonce)
+				case <-abort:
+					//logger.Trace("ecc nonce found but discarded", "LDPCNonce", nonce)
 				}
 				break search
 			}

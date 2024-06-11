@@ -9,7 +9,7 @@ import (
 	"github.com/cryptoecc/WorldLand/core/types"
 )
 
-//Parameters for matrix and seed
+// Parameters for matrix and seed
 const (
 	BigInfinity = 1000000.0
 	Inf         = 64.0
@@ -60,8 +60,7 @@ func setParameters_Seoul(header *types.Header) (Parameters, int) {
 	return parameters, level
 }
 
-
-//generateRandomNonce generate 64bit random nonce with similar way of ethereum block nonce
+// generateRandomNonce generate 64bit random nonce with similar way of ethereum block nonce
 func generateRandomNonce() uint64 {
 	seed, _ := crand.Int(crand.Reader, big.NewInt(math.MaxInt64))
 	source := rand.New(rand.NewSource(seed.Int64()))
@@ -89,7 +88,7 @@ func infinityTest(x float64) float64 {
 	}
 }
 
-//generateSeed generate seed using previous hash vector
+// generateSeed generate seed using previous hash vector
 func generateSeed(phv [32]byte) int {
 	sum := 0
 	for i := 0; i < len(phv); i++ {
@@ -98,8 +97,8 @@ func generateSeed(phv [32]byte) int {
 	return sum
 }
 
-//generateH generate H matrix using parameters
-//generateH Cannot be sure rand is same with original implementation of C++
+// generateH generate H matrix using parameters
+// generateH Cannot be sure rand is same with original implementation of C++
 func generateH(parameters Parameters) [][]int {
 	var H [][]int
 	var hSeed int64
@@ -129,7 +128,7 @@ func generateH(parameters Parameters) [][]int {
 		rnd := rand.New(src)
 		rnd.Seed(hSeed)
 		rnd.Shuffle(len(colOrder), func(i, j int) {
-			colOrder[i],colOrder[j] = colOrder[j], colOrder[i]
+			colOrder[i], colOrder[j] = colOrder[j], colOrder[i]
 		})
 		hSeed--
 
@@ -142,7 +141,7 @@ func generateH(parameters Parameters) [][]int {
 	return H
 }
 
-//generateQ generate colInRow and rowInCol matrix using H matrix
+// generateQ generate colInRow and rowInCol matrix using H matrix
 func generateQ(parameters Parameters, H [][]int) ([][]int, [][]int) {
 	colInRow := make([][]int, parameters.wr)
 	for i := 0; i < parameters.wr; i++ {
@@ -172,8 +171,8 @@ func generateQ(parameters Parameters, H [][]int) ([][]int, [][]int) {
 	return colInRow, rowInCol
 }
 
-//generateHv generate hashvector
-//It needs to compare with origin C++ implementation Especially when sha256 function is used
+// generateHv generate hashvector
+// It needs to compare with origin C++ implementation Especially when sha256 function is used
 func generateHv(parameters Parameters, encryptedHeaderWithNonce []byte) []int {
 	hashVector := make([]int, parameters.n)
 
@@ -198,5 +197,19 @@ func generateHv(parameters Parameters, encryptedHeaderWithNonce []byte) []int {
 	}
 
 	//outputWord := hashVector[:parameters.n]
+	return hashVector
+}
+
+func generateHv_gpu(n int, encryptedHeaderWithNonce []byte) []int {
+	hashVector := make([]int, n)
+
+	for i := 0; i < n/8; i++ {
+		decimal := int(encryptedHeaderWithNonce[i])
+		for j := 7; j >= 0; j-- {
+			hashVector[j+8*(i)] = decimal % 2
+			decimal /= 2
+		}
+	}
+
 	return hashVector
 }

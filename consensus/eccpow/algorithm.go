@@ -99,7 +99,7 @@ type verifyParameters struct {
 //	floatMatrix [][]float64
 //)
 
-//RunOptimizedConcurrencyLDPC use goroutine for mining block
+// RunOptimizedConcurrencyLDPC use goroutine for mining block
 func RunOptimizedConcurrencyLDPC(header *types.Header, hash []byte) (bool, []int, []int, uint64, []byte) {
 	//Need to set difficulty before running LDPC
 	// Number of goroutines : 500, Number of attempts : 50000 Not bad
@@ -190,7 +190,7 @@ func RunOptimizedConcurrencyLDPC_Seoul(header *types.Header, hash []byte) (bool,
 	return flag, hashVector, outputWord, LDPCNonce, digest
 }
 
-//MakeDecision check outputWord is valid or not using colInRow
+// MakeDecision check outputWord is valid or not using colInRow
 func MakeDecision(header *types.Header, colInRow [][]int, outputWord []int) (bool, int) {
 	parameters, difficultyLevel := setParameters(header)
 	for i := 0; i < parameters.m; i++ {
@@ -219,7 +219,7 @@ func MakeDecision(header *types.Header, colInRow [][]int, outputWord []int) (boo
 	return false, numOfOnes
 }
 
-//MakeDecision check outputWord is valid or not using colInRow
+// MakeDecision check outputWord is valid or not using colInRow
 func MakeDecision_Seoul(header *types.Header, colInRow [][]int, outputWord []int) (bool, int) {
 	parameters, _ := setParameters_Seoul(header)
 	for i := 0; i < parameters.m; i++ {
@@ -238,8 +238,34 @@ func MakeDecision_Seoul(header *types.Header, colInRow [][]int, outputWord []int
 		numOfOnes += val
 	}
 
-	if numOfOnes >= parameters.n/4  &&
-		numOfOnes <= parameters.n/4 * 3 {
+	if numOfOnes >= parameters.n/4 &&
+		numOfOnes <= parameters.n/4*3 {
+		//fmt.Printf("hamming weight: %v\n", numOfOnes)
+		return true, numOfOnes
+	}
+
+	return false, numOfOnes
+}
+
+func MakeDecision_Seoul_gpu(param_n int, param_m int, param_wc int, param_wr int, param_seed int, colInRow [][]int, outputWord []int) (bool, int) {
+	for i := 0; i < param_m; i++ {
+		sum := 0
+		for j := 0; j < param_wr; j++ {
+			//	fmt.Printf("i : %d, j : %d, m : %d, wr : %d \n", i, j, m, wr)
+			sum = sum + outputWord[colInRow[j][i]]
+		}
+		if sum%2 == 1 {
+			return false, -1
+		}
+	}
+
+	var numOfOnes int
+	for _, val := range outputWord {
+		numOfOnes += val
+	}
+
+	if numOfOnes >= param_n/4 &&
+		numOfOnes <= param_n/4*3 {
 		//fmt.Printf("hamming weight: %v\n", numOfOnes)
 		return true, numOfOnes
 	}
@@ -509,8 +535,8 @@ func seedHash(block uint64) []byte {
 	return seed
 }
 
-//// SeedHash is the seed to use for generating a verification cache and the mining
-//// dataset.
+// // SeedHash is the seed to use for generating a verification cache and the mining
+// // dataset.
 func SeedHash(block uint64) []byte {
 	return seedHash(block)
 }
