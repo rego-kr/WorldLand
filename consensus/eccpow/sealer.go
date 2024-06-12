@@ -111,8 +111,9 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 		ecc.remote.workCh <- &sealTask{block: block, results: results}
 	}
 	var (
-		pend   sync.WaitGroup
-		locals = make(chan *types.Block)
+		pend sync.WaitGroup
+		//locals = make(chan *types.Block)
+		locals = make(chan *types.Header)
 	)
 
 	fmt.Printf(" %s \n", convertToUnicodeString(strconv.Itoa(int(ecc.Hashrate()))))
@@ -125,16 +126,16 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 			if chain.Config().IsSeoul(block.Header().Number) {
 				//ecc.mine_seoul(block, id, nonce, abort, locals)
 				////////
-				header := block.Header()
+				header := types.CopyHeader(block.Header())
 				parameters, _ := setParameters_Seoul(header)
 				H := generateH(parameters)
 				colInRow, rowInCol := generateQ(parameters, H)
 				hash := ecc.SealHash(header).Bytes()
 
-				ecc.mine_seoul_gpu(block, hash, id, nonce, abort, locals, parameters.n, parameters.m, parameters.wc, parameters.wr, parameters.seed, colInRow, rowInCol, H)
+				ecc.mine_seoul_gpu(*header, hash, id, nonce, abort, locals, parameters.n, parameters.m, parameters.wc, parameters.wr, parameters.seed, colInRow, rowInCol, H)
 				////////
 			} else {
-				ecc.mine(block, id, nonce, abort, locals)
+				//ecc.mine(block, id, nonce, abort, locals)
 			}
 		}(i, uint64(ecc.rand.Int63()))
 	}
@@ -146,7 +147,8 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 		case <-stop:
 			// Outside abort, stop all miner threads
 			close(abort)
-		case result = <-locals:
+		case header := <-locals:
+			result = block.WithSeal(header)
 			// One of the threads found a block, abort all others
 			select {
 			case results <- result:
@@ -334,11 +336,7 @@ search:
 	}
 }
 
-func (ecc *ECC) mine_seoul_gpu(block *types.Block, hash []byte, id int, seed uint64, abort chan struct{}, found chan *types.Block, param_n int, param_m int, param_wc int, param_wr int, param_seed int, colInRow [][]int, rowInCol [][]int, H [][]int) {
-	// Extract some data from the header
-	var (
-		header = block.Header()
-	)
+func (ecc *ECC) mine_seoul_gpu(header types.Header, hash []byte, id int, seed uint64, abort chan struct{}, found chan *types.Header, param_n int, param_m int, param_wc int, param_wr int, param_seed int, colInRow [][]int, rowInCol [][]int, H [][]int) {
 	// Start generating random nonces until we abort or find a good one
 	var (
 		total_attempts = int64(0)
@@ -376,7 +374,6 @@ search:
 			if flag == true {
 				outputWord := goRoutineOutputWord
 
-				header = types.CopyHeader(header)
 				header.CodeLength = uint64(param_n)
 				header.MixDigest = common.BytesToHash(digest)
 				header.Nonce = types.EncodeNonce(nonce)
@@ -399,7 +396,7 @@ search:
 
 				// Seal and return a block (if still needed)
 				select {
-				case found <- block.WithSeal(header):
+				case found <- &header:
 					//logger.Trace("ecc nonce found and reported", "LDPCNonce", nonce)
 				case <-abort:
 					//logger.Trace("ecc nonce found but discarded", "LDPCNonce", nonce)
