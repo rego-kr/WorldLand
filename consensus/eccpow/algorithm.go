@@ -247,7 +247,7 @@ func MakeDecision_Seoul(header *types.Header, colInRow [][]int, outputWord []int
 	return false, numOfOnes
 }
 
-func MakeDecision_Seoul_gpu(param_n int, param_m int, param_wc int, param_wr int, param_seed int, colInRow [][]int, outputWord []int) (bool, int) {
+func MakeDecision_Seoul_gpu(param_n int, param_m int, param_wc int, param_wr int, param_seed int, colInRow [][]int, outputWord []int) bool {
 	for i := 0; i < param_m; i++ {
 		sum := 0
 		for j := 0; j < param_wr; j++ {
@@ -255,7 +255,7 @@ func MakeDecision_Seoul_gpu(param_n int, param_m int, param_wc int, param_wr int
 			sum = sum + outputWord[colInRow[j][i]]
 		}
 		if sum%2 == 1 {
-			return false, -1
+			return false
 		}
 	}
 
@@ -267,10 +267,10 @@ func MakeDecision_Seoul_gpu(param_n int, param_m int, param_wc int, param_wr int
 	if numOfOnes >= param_n/4 &&
 		numOfOnes <= param_n/4*3 {
 		//fmt.Printf("hamming weight: %v\n", numOfOnes)
-		return true, numOfOnes
+		return true
 	}
 
-	return false, numOfOnes
+	return false
 }
 
 //func isRegular(nSize, wCol, wRow int) bool {

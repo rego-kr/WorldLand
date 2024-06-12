@@ -370,9 +370,9 @@ search:
 				}
 			}
 
-			goRoutineHashVector, goRoutineOutputWord, _ := OptimizedDecodingSeoul_gpu(param_n, param_m, param_wc, param_wr, param_seed, goRoutineHashVector, rowInCol, colInRow)
+			goRoutineOutputWord := OptimizedDecodingSeoul_gpu(param_n, param_m, param_wc, param_wr, param_seed, goRoutineHashVector, rowInCol, colInRow)
 
-			flag, _ := MakeDecision_Seoul_gpu(param_n, param_m, param_wc, param_wr, param_seed, colInRow, goRoutineOutputWord)
+			flag := MakeDecision_Seoul_gpu(param_n, param_m, param_wc, param_wr, param_seed, colInRow, goRoutineOutputWord)
 
 			if flag == true {
 				var mixDigest [32]byte
