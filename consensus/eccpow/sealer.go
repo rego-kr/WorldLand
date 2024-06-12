@@ -337,10 +337,7 @@ search:
 }
 
 func (ecc *ECC) mine_seoul_gpu(header types.Header, hash []byte, id int, seed uint64, abort chan struct{}, found chan *types.Header, param_n int, param_m int, param_wc int, param_wr int, param_seed int, colInRow [][]int, rowInCol [][]int, H [][]int) {
-	// Start generating random nonces until we abort or find a good one
-	var (
-		nonce = seed
-	)
+	var nonce = seed
 
 search:
 	for {
@@ -351,22 +348,55 @@ search:
 		default:
 			digest := make([]byte, 40)
 			copy(digest, hash)
-			binary.LittleEndian.PutUint64(digest[32:], nonce)
+
+			digest[32] = byte(nonce)
+			digest[33] = byte(nonce >> 8)
+			digest[34] = byte(nonce >> 16)
+			digest[35] = byte(nonce >> 24)
+			digest[36] = byte(nonce >> 32)
+			digest[37] = byte(nonce >> 40)
+			digest[38] = byte(nonce >> 48)
+			digest[39] = byte(nonce >> 56)
+
 			digest = crypto.Keccak512(digest)
 
-			goRoutineHashVector := generateHv_gpu(param_n, digest)
+			goRoutineHashVector := make([]int, param_n)
+
+			for i := 0; i < param_n/8; i++ {
+				decimal := int(digest[i])
+				for j := 7; j >= 0; j-- {
+					goRoutineHashVector[j+8*i] = decimal % 2
+					decimal /= 2
+				}
+			}
+
 			goRoutineHashVector, goRoutineOutputWord, _ := OptimizedDecodingSeoul_gpu(param_n, param_m, param_wc, param_wr, param_seed, goRoutineHashVector, rowInCol, colInRow)
 
 			flag, _ := MakeDecision_Seoul_gpu(param_n, param_m, param_wc, param_wr, param_seed, colInRow, goRoutineOutputWord)
 
 			if flag == true {
+				var mixDigest [32]byte
+				var nonceEncoded [8]byte
 				outputWord := goRoutineOutputWord
 
 				header.CodeLength = uint64(param_n)
-				header.MixDigest = common.BytesToHash(digest)
-				header.Nonce = types.EncodeNonce(nonce)
 
-				//convert codeword
+				if len(digest) > len(mixDigest) {
+					digest = digest[len(digest)-32:]
+				}
+				copy(mixDigest[32-len(digest):], digest)
+				header.MixDigest = mixDigest
+
+				nonceEncoded[0] = byte(nonce >> 56)
+				nonceEncoded[1] = byte(nonce >> 48)
+				nonceEncoded[2] = byte(nonce >> 40)
+				nonceEncoded[3] = byte(nonce >> 32)
+				nonceEncoded[4] = byte(nonce >> 24)
+				nonceEncoded[5] = byte(nonce >> 16)
+				nonceEncoded[6] = byte(nonce >> 8)
+				nonceEncoded[7] = byte(nonce)
+				header.Nonce = nonceEncoded
+
 				var codeword []byte
 				var codeVal byte
 				for i, v := range outputWord {
@@ -382,14 +412,13 @@ search:
 				header.Codeword = make([]byte, len(codeword))
 				copy(header.Codeword, codeword)
 
-				// Seal and return a block (if still needed)
 				select {
 				case found <- &header:
-					//logger.Trace("ecc nonce found and reported", "LDPCNonce", nonce)
+					break search
 				case <-abort:
-					//logger.Trace("ecc nonce found but discarded", "LDPCNonce", nonce)
+					break search
 				}
-				break search
+
 			}
 			nonce++
 		}
