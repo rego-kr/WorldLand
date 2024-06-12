@@ -247,7 +247,7 @@ func MakeDecision_Seoul(header *types.Header, colInRow [][]int, outputWord []int
 	return false, numOfOnes
 }
 
-func MakeDecision_Seoul_gpu(param_n int, param_m int, param_wc int, param_wr int, param_seed int, colInRow [][]int, outputWord []int) bool {
+func MakeDecision_Seoul_gpu(param_n int, param_m int, param_wr int, colInRow [][]int, outputWord []int) bool {
 	for i := 0; i < param_m; i++ {
 		sum := 0
 		for j := 0; j < param_wr; j++ {

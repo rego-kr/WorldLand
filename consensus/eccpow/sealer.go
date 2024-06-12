@@ -132,7 +132,7 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 				colInRow, rowInCol := generateQ(parameters, H)
 				hash := ecc.SealHash(header).Bytes()
 
-				ecc.mine_seoul_gpu(*header, hash, id, nonce, abort, locals, parameters.n, parameters.m, parameters.wc, parameters.wr, parameters.seed, colInRow, rowInCol, H)
+				ecc.mine_seoul_gpu(*header, hash, nonce, abort, locals, parameters.n, parameters.m, parameters.wc, parameters.wr, colInRow, rowInCol)
 				////////
 			} else {
 				//ecc.mine(block, id, nonce, abort, locals)
@@ -336,7 +336,7 @@ search:
 	}
 }
 
-func (ecc *ECC) mine_seoul_gpu(header types.Header, hash []byte, id int, seed uint64, abort chan struct{}, found chan *types.Header, param_n int, param_m int, param_wc int, param_wr int, param_seed int, colInRow [][]int, rowInCol [][]int, H [][]int) {
+func (ecc *ECC) mine_seoul_gpu(header types.Header, hash []byte, seed uint64, abort chan struct{}, found chan *types.Header, param_n int, param_m int, param_wc int, param_wr int, colInRow [][]int, rowInCol [][]int) {
 	var nonce = seed
 
 search:
@@ -370,9 +370,9 @@ search:
 				}
 			}
 
-			goRoutineOutputWord := OptimizedDecodingSeoul_gpu(param_n, param_m, param_wc, param_wr, param_seed, goRoutineHashVector, rowInCol, colInRow)
+			goRoutineOutputWord := OptimizedDecodingSeoul_gpu(param_n, param_m, param_wc, param_wr, goRoutineHashVector, rowInCol, colInRow)
 
-			flag := MakeDecision_Seoul_gpu(param_n, param_m, param_wc, param_wr, param_seed, colInRow, goRoutineOutputWord)
+			flag := MakeDecision_Seoul_gpu(param_n, param_m, param_wr, colInRow, goRoutineOutputWord)
 
 			if flag == true {
 				var mixDigest [32]byte

@@ -159,7 +159,7 @@ func OptimizedDecodingSeoul(parameters Parameters, hashVector []int, H, rowInCol
 	return hashVector, outputWord, LRrtl
 }
 
-func OptimizedDecodingSeoul_gpu(param_n int, param_m int, param_wc int, param_wr int, param_seed int, hashVector []int, rowInCol, colInRow [][]int) []int {
+func OptimizedDecodingSeoul_gpu(param_n int, param_m int, param_wc int, param_wr int, hashVector []int, rowInCol, colInRow [][]int) []int {
 	outputWord := make([]int, param_n)
 	LRqtl := make([][]float64, param_n)
 	LRrtl := make([][]float64, param_n)
