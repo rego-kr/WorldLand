@@ -339,28 +339,16 @@ search:
 func (ecc *ECC) mine_seoul_gpu(header types.Header, hash []byte, id int, seed uint64, abort chan struct{}, found chan *types.Header, param_n int, param_m int, param_wc int, param_wr int, param_seed int, colInRow [][]int, rowInCol [][]int, H [][]int) {
 	// Start generating random nonces until we abort or find a good one
 	var (
-		total_attempts = int64(0)
-		attempts       = int64(0)
-		nonce          = seed
+		nonce = seed
 	)
 
 search:
 	for {
 		select {
 		case <-abort:
-			// Mining terminated, update stats and abort
-			ecc.hashrate.Mark(attempts)
 			break search
 
 		default:
-			// We don't have to update hash rate on every nonce, so update after after 2^X nonces
-			total_attempts = total_attempts + 1
-			attempts = attempts + 1
-			if (attempts % (1 << 15)) == 0 {
-				ecc.hashrate.Mark(attempts)
-				attempts = 0
-			}
-
 			digest := make([]byte, 40)
 			copy(digest, hash)
 			binary.LittleEndian.PutUint64(digest[32:], nonce)
