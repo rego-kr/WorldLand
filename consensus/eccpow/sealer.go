@@ -338,14 +338,24 @@ search:
 
 func (ecc *ECC) mine_seoul_gpu(header types.Header, hash []byte, seed uint64, abort chan struct{}, found chan *types.Header, param_n int, param_m int, param_wc int, param_wr int, colInRow [][]int, rowInCol [][]int) {
 	var nonce = seed
+	var total_attempts = int64(0)
+	var attempts = int64(0)
 
 search:
 	for {
 		select {
 		case <-abort:
+			ecc.hashrate.Mark(attempts)
 			break search
 
 		default:
+			total_attempts = total_attempts + 1
+			attempts = attempts + 1
+			if (attempts % (1 << 15)) == 0 {
+				ecc.hashrate.Mark(attempts)
+				attempts = 0
+			}
+
 			digest := make([]byte, 40)
 			copy(digest, hash)
 
