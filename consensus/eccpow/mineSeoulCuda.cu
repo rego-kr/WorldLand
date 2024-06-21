@@ -13,17 +13,20 @@
 #define maxIter 20
 #define crossErr 0.01
 #define STREAM_SIZE 2   //2
-#define GRID_SIZE 6400     //6400
+#define GRID_SIZE 1600     //6400
 #define BLOCK_SIZE 4    //4
 #define KECCAKF_ROUNDS 24
 
-#define CUDA_SAFE_CALL(call)                                                          \
-    cudaError_t err = call;                                                           \
-    if (cudaSuccess != err)                                                           \
-    {                                                                                 \
-        fprintf(stderr, "CUDA error in func %s at line %d: %s\n", __FUNCTION__, __LINE__, cudaGetErrorString(err)); \
-        exit(EXIT_FAILURE);                                                           \
-    }
+#define CUDA_SAFE_CALL(call)                                                              \
+    do                                                                                    \
+    {                                                                                     \
+        cudaError_t err = call;                                                           \
+        if (cudaSuccess != err)                                                           \
+        {                                                                                 \
+            fprintf(stderr, "CUDA error in func %s at line %d: %s\n", __FUNCTION__, __LINE__, cudaGetErrorString(err)); \
+            exit(EXIT_FAILURE);                                                           \
+        }                                                                                 \
+    } while (0)
 
 
 #define ROL64(a, offset) ((a << offset) | (a >> (64 - offset)))
@@ -347,9 +350,7 @@ __global__ void mineSeoulCudaKernel(uint8_t* hash, uint64_t seed, int param_n, i
 
 
 extern "C" {
-    __declspec(dllexport) void mineSeoulCuda(int gpu_num, uint8_t* c_hash, uint64_t seed, int param_n, int param_m, int param_wc, int param_wr, uint16_t* c_rowInCol, uint16_t* c_colInRow, Header_kernel* result, bool* abort) {
-        printf("$$$$$$$$$$$$$$$$$$$$ New block start $$$$$$$$$$$$$$$$$$$$\n");
-        
+    __declspec(dllexport) void mineSeoulCuda(int gpu_num, uint8_t* c_hash, uint64_t seed, int param_n, int param_m, int param_wc, int param_wr, uint16_t* c_rowInCol, uint16_t* c_colInRow, Header_kernel* result, bool* abort) {   
         int count = 0;
         uint64_t nonce = seed;
         CUDA_SAFE_CALL(cudaSetDevice(gpu_num));
@@ -418,8 +419,6 @@ extern "C" {
             double counts_per_sec = count / elapsed_time;
             printf("%d > %f H/s\n", count, counts_per_sec);
         }
-
-        printf("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\n@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@\\n");
 
         if (c_found) {
             result->FinishFlag = true;
