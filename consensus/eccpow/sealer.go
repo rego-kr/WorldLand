@@ -16,6 +16,27 @@
 
 package eccpow
 
+/*
+#cgo LDFLAGS: -L. -lmineseoulcuda -lcudart
+#include <stdint.h>
+#include <stdbool.h>
+
+typedef struct {
+    uint8_t MixDigest[32];
+    uint8_t Nonce[8];
+    uint8_t Codeword[256];
+	bool FinishFlag;
+} Header_kernel;
+
+extern void mineSeoulCuda(int gpu_num, uint8_t* hash, uint64_t seed, int param_n, int param_m, int param_wc, int param_wr, uint16_t* rowInCol, uint16_t* colInRow, Header_kernel* result, bool* abort);
+
+int getNumDevices() {
+    int count;
+    cudaGetDeviceCount(&count);
+    return count;
+}
+*/
+import "C"
 import (
 	"bytes"
 	"context"
@@ -32,6 +53,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/cryptoecc/WorldLand/common"
 	"github.com/cryptoecc/WorldLand/common/hexutil"
@@ -40,6 +62,13 @@ import (
 	"github.com/cryptoecc/WorldLand/crypto"
 	"github.com/cryptoecc/WorldLand/log"
 )
+
+type HeaderKernel struct {
+	MixDigest  [32]uint8
+	Nonce      [8]uint8
+	Codeword   [256]uint8
+	FinishFlag bool
+}
 
 const (
 	// staleThreshold is the maximum depth of the acceptable stale but valid ecc solution.
@@ -86,8 +115,7 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 	if ecc.shared != nil {
 		return ecc.shared.Seal(chain, block, results, stop)
 	}
-	// Create a runner and the multiple search threads it directs
-	abort := make(chan struct{})
+	abort := C.bool(false)
 
 	ecc.lock.Lock()
 	threads := ecc.threads
@@ -111,33 +139,62 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 		ecc.remote.workCh <- &sealTask{block: block, results: results}
 	}
 	var (
-		pend sync.WaitGroup
-		//locals = make(chan *types.Block)
-		locals = make(chan *types.Header)
+		pend  sync.WaitGroup
+		found = make(chan HeaderKernel)
 	)
 
 	fmt.Printf(" %s \n", convertToUnicodeString(strconv.Itoa(int(ecc.Hashrate()))))
 
-	for i := 0; i < threads; i++ {
-		pend.Add(1)
-		go func(id int, nonce uint64) {
-			defer pend.Done()
-			//ecc.mine(block, id, nonce, abort, locals)
-			if chain.Config().IsSeoul(block.Header().Number) {
-				//ecc.mine_seoul(block, id, nonce, abort, locals)
-				////////
-				header := types.CopyHeader(block.Header())
-				parameters, _ := setParameters_Seoul(header)
-				H := generateH(parameters)
-				colInRow, rowInCol := generateQ(parameters, H)
-				hash := ecc.SealHash(header).Bytes()
+	numDevices := int(C.getNumDevices())
+	if numDevices <= 0 {
+		fmt.Println("No CUDA-capable devices found.")
+	}
 
-				ecc.mine_seoul_gpu(*header, hash, nonce, abort, locals, parameters.n, parameters.m, parameters.wc, parameters.wr, colInRow, rowInCol)
-				////////
-			} else {
-				//ecc.mine(block, id, nonce, abort, locals)
+	header := types.CopyHeader(block.Header())
+	parameters, _ := setParameters_Seoul(header)
+	H := generateH(parameters)
+	colInRow, rowInCol := generateQ(parameters, H)
+	hash := ecc.SealHash(header).Bytes()
+
+	flatColInRow := make([]uint16, parameters.wr*parameters.m)
+	for i := 0; i < parameters.wr; i++ {
+		for j := 0; j < parameters.m; j++ {
+			flatColInRow[i*parameters.m+j] = (uint16)(colInRow[i][j])
+		}
+	}
+
+	flatRowInCol := make([]uint16, parameters.wc*parameters.n)
+	for i := 0; i < parameters.wc; i++ {
+		for j := 0; j < parameters.n; j++ {
+			flatRowInCol[i*parameters.n+j] = (uint16)(rowInCol[i][j])
+		}
+	}
+
+	c_colInRow := (*C.uint16_t)(unsafe.Pointer(&flatColInRow[0]))
+	c_rowInCol := (*C.uint16_t)(unsafe.Pointer(&flatRowInCol[0]))
+
+	for gpu_num := 0; gpu_num < numDevices; gpu_num++ {
+		pend.Add(1)
+
+		go func(gpu_num int, seed uint64) {
+			defer pend.Done()
+
+			var foundHeader HeaderKernel
+			foundHeader.FinishFlag = false
+
+			C.mineSeoulCuda((C.int)(gpu_num), (*C.uint8_t)(unsafe.Pointer(&hash[0])), (C.uint64_t)(seed), (C.int)(parameters.n), (C.int)(parameters.m), (C.int)(parameters.wc), (C.int)(parameters.wr), c_rowInCol, c_colInRow, (*C.Header_kernel)(unsafe.Pointer(&foundHeader)), (*C.bool)(unsafe.Pointer(&abort)))
+			if foundHeader.FinishFlag {
+				found <- foundHeader
 			}
-		}(i, uint64(ecc.rand.Int63()))
+
+			/*if nonce%20 == 0 {
+				fmt.Printf("@@ hash: %v\n", hash)
+				fmt.Printf("@@ nonce: %v\n", nonce)
+				fmt.Printf("@@ n m wc wr: %v %v %v %v\n", parameters.n, parameters.m, parameters.wc, parameters.wr)
+				fmt.Printf("@@ colInRow: %v\n", colInRow)
+				fmt.Printf("@@ rowInCol: %v\n", rowInCol)
+			}*/
+		}(gpu_num, uint64(ecc.rand.Int63()))
 	}
 
 	// Wait until sealing is terminated or a nonce is found
@@ -146,8 +203,13 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 		select {
 		case <-stop:
 			// Outside abort, stop all miner threads
-			close(abort)
-		case header := <-locals:
+			abort = C.bool(true)
+		case gpu_header := <-found:
+			header.CodeLength = uint64(parameters.n)
+			header.MixDigest = gpu_header.MixDigest
+			header.Nonce = gpu_header.Nonce
+			header.Codeword = gpu_header.Codeword[0:int((parameters.n+7)/8)]
+
 			result = block.WithSeal(header)
 			// One of the threads found a block, abort all others
 			select {
@@ -155,15 +217,14 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 			default:
 				ecc.config.Log.Warn("Sealing result is not read by miner", "mode", "local", "sealhash", ecc.SealHash(block.Header()))
 			}
-			close(abort)
+			abort = C.bool(true)
 		case <-ecc.update:
 			// Thread count was changed on user request, restart
-			close(abort)
+			abort = C.bool(true)
 			if err := ecc.Seal(chain, block, results, stop); err != nil {
 				ecc.config.Log.Error("Failed to restart sealing after update", "err", err)
 			}
 		}
-		// Wait for all miners to terminate and return the block
 		pend.Wait()
 	}()
 
