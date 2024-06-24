@@ -48,8 +48,8 @@ __constant__ int param_m;
 __constant__ int param_wc;
 __constant__ int param_wr;
 __constant__ uint8_t hash[32];
-__constant__ uint16_t colInRow[4*1188];
-__constant__ uint16_t rowInCol[3*1584];
+__constant__ int colInRow[4*1188];
+__constant__ int rowInCol[3*1584];
 
 __device__ static const uint64_t keccakf_rndc[KECCAKF_ROUNDS] = {
     0x0000000000000001ULL, 0x0000000000008082ULL,
@@ -363,7 +363,7 @@ __global__ void mineSeoulCudaKernel(uint64_t seed, Header_kernel* result, volati
 
 
 extern "C" {
-    __declspec(dllexport) void mineSeoulCuda(int number, int gpu_num, uint8_t* c_hash, uint64_t seed, int n, int m, int wc, int wr, uint16_t* c_rowInCol, uint16_t* c_colInRow, Header_kernel* result, bool* abort) {   
+    __declspec(dllexport) void mineSeoulCuda(int number, int gpu_num, uint8_t* c_hash, uint64_t seed, int n, int m, int wc, int wr, int* c_rowInCol, int* c_colInRow, Header_kernel* result, bool* abort) {   
         result->Count = 0;
         uint64_t nonce = seed;
         CUDA_SAFE_CALL(cudaSetDevice(gpu_num));
@@ -382,21 +382,21 @@ extern "C" {
         CUDA_SAFE_CALL(cudaMemcpyToSymbol(param_wc, &wc, sizeof(int)));
         CUDA_SAFE_CALL(cudaMemcpyToSymbol(param_wr, &wr, sizeof(int)));
         CUDA_SAFE_CALL(cudaMemcpyToSymbol(hash, c_hash, 32 * sizeof(uint8_t)));
-        CUDA_SAFE_CALL(cudaMemcpyToSymbol(colInRow, c_colInRow, wr * m * sizeof(uint16_t)));
-        CUDA_SAFE_CALL(cudaMemcpyToSymbol(rowInCol, c_rowInCol, wc * n * sizeof(uint16_t)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(colInRow, c_colInRow, wr * m * sizeof(int)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(rowInCol, c_rowInCol, wc * n * sizeof(int)));
 
         /*
         uint8_t *g_hash;    //to __constant__
         CUDA_SAFE_CALL(cudaMalloc((void**)&g_hash, 32 * sizeof(uint8_t)));
         CUDA_SAFE_CALL(cudaMemcpy(g_hash, c_hash, 32 * sizeof(uint8_t), cudaMemcpyHostToDevice));
 
-        uint16_t *g_colInRow;
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_colInRow, wr * m * sizeof(uint16_t)));
-        CUDA_SAFE_CALL(cudaMemcpy(g_colInRow, c_colInRow, wr * m * sizeof(uint16_t), cudaMemcpyHostToDevice));
+        int *g_colInRow;
+        CUDA_SAFE_CALL(cudaMalloc((void**)&g_colInRow, wr * m * sizeof(int)));
+        CUDA_SAFE_CALL(cudaMemcpy(g_colInRow, c_colInRow, wr * m * sizeof(int), cudaMemcpyHostToDevice));
 
-        uint16_t *g_rowInCol;
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_rowInCol, wc * n * sizeof(uint16_t)));
-        CUDA_SAFE_CALL(cudaMemcpy(g_rowInCol, c_rowInCol, wc * n * sizeof(uint16_t), cudaMemcpyHostToDevice));
+        int *g_rowInCol;
+        CUDA_SAFE_CALL(cudaMalloc((void**)&g_rowInCol, wc * n * sizeof(int)));
+        CUDA_SAFE_CALL(cudaMemcpy(g_rowInCol, c_rowInCol, wc * n * sizeof(int), cudaMemcpyHostToDevice));
         */
         
         for (int i = 0; i < STREAM_SIZE; i++) {

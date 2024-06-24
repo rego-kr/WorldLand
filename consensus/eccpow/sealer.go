@@ -29,7 +29,7 @@ typedef struct {
 	uint64_t Count;
 } Header_kernel;
 
-extern void mineSeoulCuda(int number, int gpu_num, uint8_t* hash, uint64_t seed, int n, int m, int wc, int wr, uint16_t* rowInCol, uint16_t* colInRow, Header_kernel* result, bool* abort);
+extern void mineSeoulCuda(int number, int gpu_num, uint8_t* hash, uint64_t seed, int n, int m, int wc, int wr, int* rowInCol, int* colInRow, Header_kernel* result, bool* abort);
 
 int getNumDevices() {
     int count;
@@ -159,22 +159,22 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 	colInRow, rowInCol := generateQ(parameters, H)
 	hash := ecc.SealHash(header).Bytes()
 
-	flatColInRow := make([]uint16, parameters.wr*parameters.m)
+	flatColInRow := make([]int, parameters.wr*parameters.m)
 	for i := 0; i < parameters.wr; i++ {
 		for j := 0; j < parameters.m; j++ {
-			flatColInRow[i*parameters.m+j] = (uint16)(colInRow[i][j])
+			flatColInRow[i*parameters.m+j] = colInRow[i][j]
 		}
 	}
 
-	flatRowInCol := make([]uint16, parameters.wc*parameters.n)
+	flatRowInCol := make([]int, parameters.wc*parameters.n)
 	for i := 0; i < parameters.wc; i++ {
 		for j := 0; j < parameters.n; j++ {
-			flatRowInCol[i*parameters.n+j] = (uint16)(rowInCol[i][j])
+			flatRowInCol[i*parameters.n+j] = rowInCol[i][j]
 		}
 	}
 
-	c_colInRow := (*C.uint16_t)(unsafe.Pointer(&flatColInRow[0]))
-	c_rowInCol := (*C.uint16_t)(unsafe.Pointer(&flatRowInCol[0]))
+	c_colInRow := (*C.int)(unsafe.Pointer(&flatColInRow[0]))
+	c_rowInCol := (*C.int)(unsafe.Pointer(&flatRowInCol[0]))
 
 	for gpu_num := 0; gpu_num < numDevices; gpu_num++ {
 		pend.Add(1)
