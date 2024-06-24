@@ -29,7 +29,7 @@ typedef struct {
 	uint64_t Count;
 } Header_kernel;
 
-extern void mineSeoulCuda(int number, int gpu_num, uint8_t* hash, uint64_t seed, int param_n, int param_m, int param_wc, int param_wr, uint16_t* rowInCol, uint16_t* colInRow, Header_kernel* result, bool* abort);
+extern void mineSeoulCuda(int number, int gpu_num, uint8_t* hash, uint64_t seed, int n, int m, int wc, int wr, uint16_t* rowInCol, uint16_t* colInRow, Header_kernel* result, bool* abort);
 
 int getNumDevices() {
     int count;

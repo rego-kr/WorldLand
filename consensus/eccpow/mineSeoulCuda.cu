@@ -43,6 +43,14 @@ typedef struct {
     uint64_t Count;
 } Header_kernel;
 
+__constant__ int param_n;
+__constant__ int param_m;
+__constant__ int param_wc;
+__constant__ int param_wr;
+__constant__ uint8_t hash[32];
+__constant__ uint16_t colInRow[4*1188];
+__constant__ uint16_t rowInCol[3*1584];
+
 __device__ static const uint64_t keccakf_rndc[KECCAKF_ROUNDS] = {
     0x0000000000000001ULL, 0x0000000000008082ULL,
     0x800000000000808aULL, 0x8000000080008000ULL,
@@ -170,7 +178,7 @@ __device__ float funcF(float x) {
     }
 }
 
-__device__ void optimizedDecodingSeoulCuda(int param_n, int param_m, int param_wc, int param_wr, uint8_t* hashVector, uint16_t* rowInCol, uint16_t* colInRow, float* g_a, float* g_b, float* g_c, float* g_d, int stream_id, int GRID_SIZE) {
+__device__ void optimizedDecodingSeoulCuda(uint8_t* hashVector, float* g_a, float* g_b, float* g_c, float* g_d, int stream_id, int GRID_SIZE) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
 
     int ab_offset = idx * param_n * param_m + stream_id * GRID_SIZE * BLOCK_SIZE * param_n * param_m;
@@ -238,7 +246,7 @@ __device__ void optimizedDecodingSeoulCuda(int param_n, int param_m, int param_w
     }
 }
 
-__device__ bool makeDecisionSeoulCuda(int param_n, int param_m, int param_wr, uint16_t* colInRow, uint8_t* outputWord) {
+__device__ bool makeDecisionSeoulCuda(int param_n, int param_m, int param_wr, uint8_t* outputWord) {
     for (int i = 0; i < param_m; i++) {
         int sum = 0;
         for (int j = 0; j < param_wr; j++) {
@@ -261,7 +269,7 @@ __device__ bool makeDecisionSeoulCuda(int param_n, int param_m, int param_wr, ui
     return false;
 }
 
-__global__ void mineSeoulCudaKernel(uint8_t* hash, uint64_t seed, int param_n, int param_m, int param_wc, int param_wr, uint16_t* rowInCol, uint16_t* colInRow, Header_kernel* result, volatile bool* found, float* g_a, float* g_b, float* g_c, float* g_d, int stream_id, uint8_t* g_outputWord, int GRID_SIZE) {
+__global__ void mineSeoulCudaKernel(uint64_t seed, Header_kernel* result, volatile bool* found, float* g_a, float* g_b, float* g_c, float* g_d, int stream_id, uint8_t* g_outputWord, int GRID_SIZE) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     uint64_t nonce = seed + idx;
     int outputWord_offset = idx * param_n + stream_id * GRID_SIZE * BLOCK_SIZE * param_n;
@@ -300,10 +308,10 @@ __global__ void mineSeoulCudaKernel(uint8_t* hash, uint64_t seed, int param_n, i
     }
     printf("\n\n");*/
 
-    optimizedDecodingSeoulCuda(param_n, param_m, param_wc, param_wr, outputWord, rowInCol, colInRow, g_a, g_b, g_c, g_d, stream_id, GRID_SIZE);
+    optimizedDecodingSeoulCuda(outputWord, g_a, g_b, g_c, g_d, stream_id, GRID_SIZE);
 
     //if (true){
-    if (makeDecisionSeoulCuda(param_n, param_m, param_wr, colInRow, outputWord)) {
+    if (makeDecisionSeoulCuda(param_n, param_m, param_wr, outputWord)) {
     //if (outputWord[0]==1&&outputWord[1]==1&&outputWord[2]==1&&outputWord[3]==1&&outputWord[4]==1&&outputWord[5]==1&&outputWord[6]==1&&outputWord[7]==1&&outputWord[8]==1&&outputWord[9]==1&&outputWord[10]==1&&outputWord[11]==1&&outputWord[12]==1&&outputWord[13]==1&&outputWord[14]==1&&outputWord[15]==1&&outputWord[16]==1&&outputWord[17]==1&&outputWord[18]==1&&outputWord[19]==1&&outputWord[20]==1&&outputWord[21]==1&&outputWord[22]==1) {
         printf("found! %lld %d %d %d\n", nonce, stream_id, blockIdx.x, threadIdx.x);
         uint8_t mixDigest[32];
@@ -355,7 +363,7 @@ __global__ void mineSeoulCudaKernel(uint8_t* hash, uint64_t seed, int param_n, i
 
 
 extern "C" {
-    __declspec(dllexport) void mineSeoulCuda(int number, int gpu_num, uint8_t* c_hash, uint64_t seed, int param_n, int param_m, int param_wc, int param_wr, uint16_t* c_rowInCol, uint16_t* c_colInRow, Header_kernel* result, bool* abort) {   
+    __declspec(dllexport) void mineSeoulCuda(int number, int gpu_num, uint8_t* c_hash, uint64_t seed, int n, int m, int wc, int wr, uint16_t* c_rowInCol, uint16_t* c_colInRow, Header_kernel* result, bool* abort) {   
         result->Count = 0;
         uint64_t nonce = seed;
         CUDA_SAFE_CALL(cudaSetDevice(gpu_num));
@@ -369,17 +377,27 @@ extern "C" {
         CUDA_SAFE_CALL(cudaMalloc((void**)&g_found, sizeof(bool)));
         CUDA_SAFE_CALL(cudaMemset((void*)g_found, 0, sizeof(bool)));
 
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(param_n, &n, sizeof(int)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(param_m, &m, sizeof(int)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(param_wc, &wc, sizeof(int)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(param_wr, &wr, sizeof(int)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(hash, c_hash, 32 * sizeof(uint8_t)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(colInRow, c_colInRow, wr * m * sizeof(uint16_t)));
+        CUDA_SAFE_CALL(cudaMemcpyToSymbol(rowInCol, c_rowInCol, wc * n * sizeof(uint16_t)));
+
+        /*
         uint8_t *g_hash;    //to __constant__
         CUDA_SAFE_CALL(cudaMalloc((void**)&g_hash, 32 * sizeof(uint8_t)));
         CUDA_SAFE_CALL(cudaMemcpy(g_hash, c_hash, 32 * sizeof(uint8_t), cudaMemcpyHostToDevice));
 
         uint16_t *g_colInRow;
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_colInRow, param_wr * param_m * sizeof(uint16_t)));
-        CUDA_SAFE_CALL(cudaMemcpy(g_colInRow, c_colInRow, param_wr * param_m * sizeof(uint16_t), cudaMemcpyHostToDevice));
+        CUDA_SAFE_CALL(cudaMalloc((void**)&g_colInRow, wr * m * sizeof(uint16_t)));
+        CUDA_SAFE_CALL(cudaMemcpy(g_colInRow, c_colInRow, wr * m * sizeof(uint16_t), cudaMemcpyHostToDevice));
 
         uint16_t *g_rowInCol;
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_rowInCol, param_wc * param_n * sizeof(uint16_t)));
-        CUDA_SAFE_CALL(cudaMemcpy(g_rowInCol, c_rowInCol, param_wc * param_n * sizeof(uint16_t), cudaMemcpyHostToDevice));
+        CUDA_SAFE_CALL(cudaMalloc((void**)&g_rowInCol, wc * n * sizeof(uint16_t)));
+        CUDA_SAFE_CALL(cudaMemcpy(g_rowInCol, c_rowInCol, wc * n * sizeof(uint16_t), cudaMemcpyHostToDevice));
+        */
         
         for (int i = 0; i < STREAM_SIZE; i++) {
             CUDA_SAFE_CALL(cudaStreamCreate(&streams[i]));
@@ -411,8 +429,8 @@ extern "C" {
         float *g_d;
         uint8_t *g_outputWord;
 
-        GRID_SIZE = int(targetMemorySize / (STREAM_SIZE*BLOCK_SIZE*param_n) / ((param_m+1)*2*sizeof(float) + sizeof(uint8_t)));
-        //GRID_SIZE = int((targetMemorySize - memory.used) / (STREAM_SIZE*BLOCK_SIZE*param_n) / ((param_m+1)*2*sizeof(float) + sizeof(uint8_t)));
+        GRID_SIZE = int(targetMemorySize / (STREAM_SIZE*BLOCK_SIZE*n) / ((m+1)*2*sizeof(float) + sizeof(uint8_t)));
+        //GRID_SIZE = int((targetMemorySize - memory.used) / (STREAM_SIZE*BLOCK_SIZE*n) / ((m+1)*2*sizeof(float) + sizeof(uint8_t)));
         printf("-------- %d --------\n-------- %d --------\nUsedMemory : %lld\nMallocMemory : %lld\nGRID : %d\n\n", number, gpu_num, memory.used, targetMemorySize - memory.used, GRID_SIZE);
 
         /*while(targetMemorySize < memory.used){
@@ -421,17 +439,17 @@ extern "C" {
                 nvmlShutdown();
                 return;
             }
-            GRID_SIZE = int((targetMemorySize - memory.used) / (STREAM_SIZE*BLOCK_SIZE*param_n) / ((param_m+1)*2*sizeof(float) + sizeof(uint8_t)));
+            GRID_SIZE = int((targetMemorySize - memory.used) / (STREAM_SIZE*BLOCK_SIZE*n) / ((m+1)*2*sizeof(float) + sizeof(uint8_t)));
             printf("-------- %d --------\nUsedMemory : %lld\nMallocMemory : %lld\nGRID : %d\n\n", gpu_num, memory.used, targetMemorySize - memory.used, GRID_SIZE);
             if(*abort)
                 return;
         }*/
 
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_a, STREAM_SIZE * GRID_SIZE * BLOCK_SIZE * param_m * param_n * sizeof(float)));
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_b, STREAM_SIZE * GRID_SIZE * BLOCK_SIZE * param_m * param_n * sizeof(float)));
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_c, STREAM_SIZE * GRID_SIZE * BLOCK_SIZE * param_n * sizeof(float)));
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_d, STREAM_SIZE * GRID_SIZE * BLOCK_SIZE * param_n * sizeof(float)));
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_outputWord, STREAM_SIZE * GRID_SIZE * BLOCK_SIZE * param_n * sizeof(uint8_t)));
+        CUDA_SAFE_CALL(cudaMalloc((void**)&g_a, STREAM_SIZE * GRID_SIZE * BLOCK_SIZE * m * n * sizeof(float)));
+        CUDA_SAFE_CALL(cudaMalloc((void**)&g_b, STREAM_SIZE * GRID_SIZE * BLOCK_SIZE * m * n * sizeof(float)));
+        CUDA_SAFE_CALL(cudaMalloc((void**)&g_c, STREAM_SIZE * GRID_SIZE * BLOCK_SIZE * n * sizeof(float)));
+        CUDA_SAFE_CALL(cudaMalloc((void**)&g_d, STREAM_SIZE * GRID_SIZE * BLOCK_SIZE * n * sizeof(float)));
+        CUDA_SAFE_CALL(cudaMalloc((void**)&g_outputWord, STREAM_SIZE * GRID_SIZE * BLOCK_SIZE * n * sizeof(uint8_t)));
 
         int stream_id;
         bool c_found = false;
@@ -439,7 +457,7 @@ extern "C" {
 
         while (!c_found && !(*abort)) {
             for (stream_id = 0; stream_id < STREAM_SIZE ; stream_id++) {
-                mineSeoulCudaKernel<<<GRID_SIZE, BLOCK_SIZE, 0, streams[stream_id]>>>(g_hash, nonce+(result->Count), param_n, param_m, param_wc, param_wr, g_rowInCol, g_colInRow, g_found_header, g_found, g_a, g_b, g_c, g_d, stream_id, g_outputWord, GRID_SIZE);
+                mineSeoulCudaKernel<<<GRID_SIZE, BLOCK_SIZE, 0, streams[stream_id]>>>(nonce+(result->Count), g_found_header, g_found, g_a, g_b, g_c, g_d, stream_id, g_outputWord, GRID_SIZE);
                 (result->Count)+=GRID_SIZE*BLOCK_SIZE;
             }
 
@@ -463,9 +481,6 @@ extern "C" {
 
         CUDA_SAFE_CALL(cudaFree((void*)g_found_header));
         CUDA_SAFE_CALL(cudaFree((void*)g_found));
-        CUDA_SAFE_CALL(cudaFree((void*)g_hash));
-        CUDA_SAFE_CALL(cudaFree((void*)g_colInRow));
-        CUDA_SAFE_CALL(cudaFree((void*)g_rowInCol));
         CUDA_SAFE_CALL(cudaFree((void*)g_a));
         CUDA_SAFE_CALL(cudaFree((void*)g_b));
         CUDA_SAFE_CALL(cudaFree((void*)g_c));
