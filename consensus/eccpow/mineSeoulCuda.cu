@@ -437,11 +437,11 @@ extern "C" {
 
             CUDA_SAFE_CALL(cudaMemcpy((void*)&c_found, (void*)g_found, sizeof(bool), cudaMemcpyDeviceToHost));
 
-            clock_t current_time = clock();
+            /*clock_t current_time = clock();
             float elapsed_time = (float)(current_time - start_time) / CLOCKS_PER_SEC;
 
             float counts_per_sec = (result->Count) / elapsed_time;
-            printf("%d > %f H/s\n", (result->Count), counts_per_sec);
+            printf("%d > %f H/s\n", (result->Count), counts_per_sec);*/
         }
 
         if (c_found) {
