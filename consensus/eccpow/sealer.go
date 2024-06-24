@@ -159,17 +159,17 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 	colInRow, rowInCol := generateQ(parameters, H)
 	hash := ecc.SealHash(header).Bytes()
 
-	flatColInRow := make([]int, parameters.wr*parameters.m)
+	flatColInRow := make([]int32, parameters.wr*parameters.m)
 	for i := 0; i < parameters.wr; i++ {
 		for j := 0; j < parameters.m; j++ {
-			flatColInRow[i*parameters.m+j] = colInRow[i][j]
+			flatColInRow[i*parameters.m+j] = (int32)(colInRow[i][j])
 		}
 	}
 
-	flatRowInCol := make([]int, parameters.wc*parameters.n)
+	flatRowInCol := make([]int32, parameters.wc*parameters.n)
 	for i := 0; i < parameters.wc; i++ {
 		for j := 0; j < parameters.n; j++ {
-			flatRowInCol[i*parameters.n+j] = rowInCol[i][j]
+			flatRowInCol[i*parameters.n+j] = (int32)(rowInCol[i][j])
 		}
 	}
 

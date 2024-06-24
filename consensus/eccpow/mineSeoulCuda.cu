@@ -12,13 +12,12 @@
 
 #define GPU_USAGE 100
 #define MEMORY_USAGE 25
-#define BigInfinity 1000000.0
-#define Inf 64.0
+#define BigInfinity 1000000.0f
+#define Inf 64.0f
 #define maxIter 20
-#define crossErr 0.01
-#define STREAM_SIZE 2   //2
-//#define GRID_SIZE 5120     //6400
-#define BLOCK_SIZE 4    //4
+#define crossErr 0.01f
+#define STREAM_SIZE 2
+#define BLOCK_SIZE 4
 #define KECCAKF_ROUNDS 24
 
 #define CUDA_SAFE_CALL(call)                                                              \
@@ -112,9 +111,9 @@ __device__ void keccakf(uint64_t st[25]) {
 }
 
 __device__ void keccak_absorb(uint64_t* state, const uint8_t* in) {
-    size_t inlen = 40;
-    size_t rsize = 72;
-    size_t i;
+    int inlen = 40;
+    int rsize = 72;
+    int i;
     uint8_t temp[200] = { 0 };
 
     memcpy(temp, in, inlen);
@@ -128,9 +127,9 @@ __device__ void keccak_absorb(uint64_t* state, const uint8_t* in) {
 }
 
 __device__ void keccak_squeeze(uint64_t* state, uint8_t* out) {
-    size_t outlen = 64;
-    size_t rsize = 72;
-    size_t i;
+    int outlen = 64;
+    int rsize = 72;
+    int i;
 
     while (outlen > 0) {
         if (outlen >= rsize) {
@@ -170,8 +169,8 @@ __device__ float infinityTest(float x) {
 
 __device__ float funcF(float x) {
     if (x >= BigInfinity) {
-        return 1.0 / BigInfinity;
-    } else if (x <= (1.0 / BigInfinity)) {
+        return 1.0f / BigInfinity;
+    } else if (x <= (1.0f / BigInfinity)) {
         return BigInfinity;
     } else {
         return log((exp(x) + 1) / (exp(x) - 1));
@@ -186,15 +185,15 @@ __device__ void optimizedDecodingSeoulCuda(uint8_t* hashVector, float* g_a, floa
 
     for (int i = 0; i < param_n; i++) {
         for (int j = 0; j < param_m; j++) {
-            g_a[ab_offset + i * param_m + j] = 0.0;
-            g_b[ab_offset + i * param_m + j] = 0.0;
+            g_a[ab_offset + i * param_m + j] = 0.0f;
+            g_b[ab_offset + i * param_m + j] = 0.0f;
         }
         g_c[cd_offset+i] = log((1 - crossErr) / crossErr) * float((hashVector[i] * 2 - 1));
     }
 
     for (int ind = 1; ind <= maxIter; ind++) {
         for (int t = 0; t < param_n; t++) {
-            float temp3 = 0.0;
+            float temp3 = 0.0f;
 
             for (int mp = 0; mp < param_wc; mp++) {
                 temp3 = infinityTest(temp3 + g_b[ab_offset + t * param_m + rowInCol[mp * param_n + t]]);
@@ -209,17 +208,17 @@ __device__ void optimizedDecodingSeoulCuda(uint8_t* hashVector, float* g_a, floa
 
         for (int k = 0; k < param_m; k++) {
             for (int l = 0; l < param_wr; l++) {
-                float temp3 = 0.0;
-                float sign = 1.0;
-                float tempSign = 0.0;
+                float temp3 = 0.0f;
+                float sign = 1.0f;
+                float tempSign = 0.0f;
 
                 for (int m = 0; m < param_wr; m++) {
                     if (m != l) {
                         temp3 += funcF(fabs(g_a[ab_offset + colInRow[m * param_m + k] * param_m + k]));
-                        if (g_a[ab_offset + colInRow[m * param_m + k] * param_m + k] > 0.0) {
-                            tempSign = 1.0;
+                        if (g_a[ab_offset + colInRow[m * param_m + k] * param_m + k] > 0.0f) {
+                            tempSign = 1.0f;
                         } else {
-                            tempSign = -1.0;
+                            tempSign = -1.0f;
                         }
                         sign *= tempSign;
                     }
@@ -290,11 +289,6 @@ __global__ void mineSeoulCudaKernel(uint64_t seed, Header_kernel* result, volati
 
     keccak512(digest);
 
-    /*for(int i=0; i<64; i++){
-        printf("%d,", digest[i]);
-    }
-    printf("\n\n");*/
-
     for (int i = 0; i < param_n / 8; i++) {
         int decimal = (int)digest[i];
         for (int j = 7; j >= 0; j--) {
@@ -302,18 +296,12 @@ __global__ void mineSeoulCudaKernel(uint64_t seed, Header_kernel* result, volati
             decimal /= 2;
         }
     }
-   
-    /*for(int i=0; i<param_n; i++){
-        printf("%d", outputWord[i]);
-    }
-    printf("\n\n");*/
 
     optimizedDecodingSeoulCuda(outputWord, g_a, g_b, g_c, g_d, stream_id, GRID_SIZE);
 
     //if (true){
     if (makeDecisionSeoulCuda(outputWord)) {
     //if (outputWord[0]==1&&outputWord[1]==1&&outputWord[2]==1&&outputWord[3]==1&&outputWord[4]==1&&outputWord[5]==1&&outputWord[6]==1&&outputWord[7]==1&&outputWord[8]==1&&outputWord[9]==1&&outputWord[10]==1&&outputWord[11]==1&&outputWord[12]==1&&outputWord[13]==1&&outputWord[14]==1&&outputWord[15]==1&&outputWord[16]==1&&outputWord[17]==1&&outputWord[18]==1&&outputWord[19]==1&&outputWord[20]==1&&outputWord[21]==1&&outputWord[22]==1) {
-        printf("found! %lld %d %d %d\n", nonce, stream_id, blockIdx.x, threadIdx.x);
         uint8_t mixDigest[32];
         int digestLen = sizeof(digest) / sizeof(digest[0]);
         int outputWordLen = param_n;
@@ -384,20 +372,6 @@ extern "C" {
         CUDA_SAFE_CALL(cudaMemcpyToSymbol(hash, c_hash, 32 * sizeof(uint8_t)));
         CUDA_SAFE_CALL(cudaMemcpyToSymbol(colInRow, c_colInRow, wr * m * sizeof(int)));
         CUDA_SAFE_CALL(cudaMemcpyToSymbol(rowInCol, c_rowInCol, wc * n * sizeof(int)));
-
-        /*
-        uint8_t *g_hash;    //to __constant__
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_hash, 32 * sizeof(uint8_t)));
-        CUDA_SAFE_CALL(cudaMemcpy(g_hash, c_hash, 32 * sizeof(uint8_t), cudaMemcpyHostToDevice));
-
-        int *g_colInRow;
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_colInRow, wr * m * sizeof(int)));
-        CUDA_SAFE_CALL(cudaMemcpy(g_colInRow, c_colInRow, wr * m * sizeof(int), cudaMemcpyHostToDevice));
-
-        int *g_rowInCol;
-        CUDA_SAFE_CALL(cudaMalloc((void**)&g_rowInCol, wc * n * sizeof(int)));
-        CUDA_SAFE_CALL(cudaMemcpy(g_rowInCol, c_rowInCol, wc * n * sizeof(int), cudaMemcpyHostToDevice));
-        */
         
         for (int i = 0; i < STREAM_SIZE; i++) {
             CUDA_SAFE_CALL(cudaStreamCreate(&streams[i]));
@@ -464,9 +438,9 @@ extern "C" {
             CUDA_SAFE_CALL(cudaMemcpy((void*)&c_found, (void*)g_found, sizeof(bool), cudaMemcpyDeviceToHost));
 
             clock_t current_time = clock();
-            double elapsed_time = (double)(current_time - start_time) / CLOCKS_PER_SEC;
+            float elapsed_time = (float)(current_time - start_time) / CLOCKS_PER_SEC;
 
-            double counts_per_sec = (result->Count) / elapsed_time;
+            float counts_per_sec = (result->Count) / elapsed_time;
             printf("%d > %f H/s\n", (result->Count), counts_per_sec);
         }
 
