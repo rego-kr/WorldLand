@@ -246,7 +246,7 @@ __device__ void optimizedDecodingSeoulCuda(uint8_t* hashVector, float* g_a, floa
     }
 }
 
-__device__ bool makeDecisionSeoulCuda(int param_n, int param_m, int param_wr, uint8_t* outputWord) {
+__device__ bool makeDecisionSeoulCuda(uint8_t* outputWord) {
     for (int i = 0; i < param_m; i++) {
         int sum = 0;
         for (int j = 0; j < param_wr; j++) {
@@ -311,7 +311,7 @@ __global__ void mineSeoulCudaKernel(uint64_t seed, Header_kernel* result, volati
     optimizedDecodingSeoulCuda(outputWord, g_a, g_b, g_c, g_d, stream_id, GRID_SIZE);
 
     //if (true){
-    if (makeDecisionSeoulCuda(param_n, param_m, param_wr, outputWord)) {
+    if (makeDecisionSeoulCuda(outputWord)) {
     //if (outputWord[0]==1&&outputWord[1]==1&&outputWord[2]==1&&outputWord[3]==1&&outputWord[4]==1&&outputWord[5]==1&&outputWord[6]==1&&outputWord[7]==1&&outputWord[8]==1&&outputWord[9]==1&&outputWord[10]==1&&outputWord[11]==1&&outputWord[12]==1&&outputWord[13]==1&&outputWord[14]==1&&outputWord[15]==1&&outputWord[16]==1&&outputWord[17]==1&&outputWord[18]==1&&outputWord[19]==1&&outputWord[20]==1&&outputWord[21]==1&&outputWord[22]==1) {
         printf("found! %lld %d %d %d\n", nonce, stream_id, blockIdx.x, threadIdx.x);
         uint8_t mixDigest[32];
