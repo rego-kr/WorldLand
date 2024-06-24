@@ -146,7 +146,7 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 	)
 
 	fmt.Printf(" %s \n", convertToUnicodeString(strconv.Itoa(int(ecc.Hashrate()))))
-	fmt.Printf("@@@@@@@ %v @@@@@@@@\n", int(ecc.Hashrate()))
+	//fmt.Printf("@@@@@@@ %v @@@@@@@@\n", int(ecc.Hashrate()))
 
 	numDevices := int(C.getNumDevices())
 	if numDevices <= 0 {

@@ -405,7 +405,7 @@ extern "C" {
 
         GRID_SIZE = int(targetMemorySize / (STREAM_SIZE*BLOCK_SIZE*n) / ((m+1)*2*sizeof(float) + sizeof(uint8_t)));
         //GRID_SIZE = int((targetMemorySize - memory.used) / (STREAM_SIZE*BLOCK_SIZE*n) / ((m+1)*2*sizeof(float) + sizeof(uint8_t)));
-        printf("-------- %d --------\n-------- %d --------\nUsedMemory : %lld\nMallocMemory : %lld\nGRID : %d\n\n", number, gpu_num, memory.used, targetMemorySize - memory.used, GRID_SIZE);
+        //printf("-------- %d --------\n-------- %d --------\nUsedMemory : %lld\nMallocMemory : %lld\nGRID : %d\n\n", number, gpu_num, memory.used, targetMemorySize - memory.used, GRID_SIZE);
 
         /*while(targetMemorySize < memory.used){
             Sleep(250);
@@ -427,7 +427,7 @@ extern "C" {
 
         int stream_id;
         bool c_found = false;
-        clock_t start_time = clock();
+        //clock_t start_time = clock();
 
         while (!c_found && !(*abort)) {
             for (stream_id = 0; stream_id < STREAM_SIZE ; stream_id++) {
