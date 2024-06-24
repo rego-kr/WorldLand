@@ -51,3 +51,4 @@ consensus/eccpow/cudart.lib
 consensus/eccpow/mineSeoulCuda.exp
 consensus/eccpow/mineSeoulCuda.dll
 consensus/eccpow/mineSeoulCuda.lib
+consensus/eccpow/nvml.lib

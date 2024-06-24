@@ -26,9 +26,10 @@ typedef struct {
     uint8_t Nonce[8];
     uint8_t Codeword[256];
 	bool FinishFlag;
+	uint64_t Count;
 } Header_kernel;
 
-extern void mineSeoulCuda(int gpu_num, uint8_t* hash, uint64_t seed, int param_n, int param_m, int param_wc, int param_wr, uint16_t* rowInCol, uint16_t* colInRow, Header_kernel* result, bool* abort);
+extern void mineSeoulCuda(int number, int gpu_num, uint8_t* hash, uint64_t seed, int param_n, int param_m, int param_wc, int param_wr, uint16_t* rowInCol, uint16_t* colInRow, Header_kernel* result, bool* abort);
 
 int getNumDevices() {
     int count;
@@ -68,6 +69,7 @@ type HeaderKernel struct {
 	Nonce      [8]uint8
 	Codeword   [256]uint8
 	FinishFlag bool
+	Count      uint64
 }
 
 const (
@@ -144,6 +146,7 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 	)
 
 	fmt.Printf(" %s \n", convertToUnicodeString(strconv.Itoa(int(ecc.Hashrate()))))
+	fmt.Printf("@@@@@@@ %v @@@@@@@@\n", int(ecc.Hashrate()))
 
 	numDevices := int(C.getNumDevices())
 	if numDevices <= 0 {
@@ -182,10 +185,12 @@ func (ecc *ECC) Seal(chain consensus.ChainHeaderReader, block *types.Block, resu
 			var foundHeader HeaderKernel
 			foundHeader.FinishFlag = false
 
-			C.mineSeoulCuda((C.int)(gpu_num), (*C.uint8_t)(unsafe.Pointer(&hash[0])), (C.uint64_t)(seed), (C.int)(parameters.n), (C.int)(parameters.m), (C.int)(parameters.wc), (C.int)(parameters.wr), c_rowInCol, c_colInRow, (*C.Header_kernel)(unsafe.Pointer(&foundHeader)), (*C.bool)(unsafe.Pointer(&abort)))
+			C.mineSeoulCuda((C.int)((header.Number).Int64()), (C.int)(gpu_num), (*C.uint8_t)(unsafe.Pointer(&hash[0])), (C.uint64_t)(seed), (C.int)(parameters.n), (C.int)(parameters.m), (C.int)(parameters.wc), (C.int)(parameters.wr), c_rowInCol, c_colInRow, (*C.Header_kernel)(unsafe.Pointer(&foundHeader)), (*C.bool)(unsafe.Pointer(&abort)))
 			if foundHeader.FinishFlag {
 				found <- foundHeader
 			}
+
+			ecc.hashrate.Mark(int64(foundHeader.Count)) //need to fix
 
 			/*if nonce%20 == 0 {
 				fmt.Printf("@@ hash: %v\n", hash)
