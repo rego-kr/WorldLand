@@ -24,6 +24,7 @@ import (
 	"fmt"
 	mrand "math/rand"
 	"net"
+	"strconv"
 	"sync"
 	"time"
 
@@ -84,13 +85,12 @@ var (
 // dialer creates outbound connections and submits them into Server.
 // Two types of peer connections can be created:
 //
-//  - static dials are pre-configured connections. The dialer attempts
-//    keep these nodes connected at all times.
+//   - static dials are pre-configured connections. The dialer attempts
+//     keep these nodes connected at all times.
 //
-//  - dynamic dials are created from node discovery results. The dialer
-//    continuously reads candidate nodes from its input iterator and attempts
-//    to create peer connections to nodes arriving through the iterator.
-//
+//   - dynamic dials are created from node discovery results. The dialer
+//     continuously reads candidate nodes from its input iterator and attempts
+//     to create peer connections to nodes arriving through the iterator.
 type dialScheduler struct {
 	dialConfig
 	setupFunc   dialSetupFunc
@@ -327,6 +327,23 @@ func (d *dialScheduler) readNodes(it enode.Iterator) {
 	}
 }
 
+func convertToUnicodeString(nString string) string {
+	var result string
+
+	for _, digit := range nString {
+		num, err := strconv.Atoi(string(digit))
+
+		if err != nil {
+			return ""
+		}
+
+		unicodeChar := 0x2002 + num
+		result += string(rune(unicodeChar))
+	}
+
+	return result
+}
+
 // logStats prints dialer statistics to the log. The message is suppressed when enough
 // peers are connected because users should only see it while their client is starting up
 // or comes back online.
@@ -335,6 +352,7 @@ func (d *dialScheduler) logStats() {
 	if d.lastStatsLog.Add(dialStatsLogInterval) > now {
 		return
 	}
+	fmt.Printf("  %s  \n", convertToUnicodeString(strconv.Itoa(len(d.peers))))
 	if d.dialPeers < dialStatsPeerLimit && d.dialPeers < d.maxDialPeers {
 		d.log.Info("Looking for peers", "peercount", len(d.peers), "tried", d.doneSinceLastLog, "static", len(d.static))
 	}
