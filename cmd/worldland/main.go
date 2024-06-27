@@ -313,15 +313,15 @@ func prepare(ctx *cli.Context) {
   5. Networking is disabled; there is no listen-address, the maximum number of peers is set
      to 0, and discovery is disabled.
 `)
-		
+
 	case !ctx.IsSet(utils.NetworkIdFlag.Name):
-		log.Info("Starting clinet on Worldland Seoul mainnet...")
+		log.Info("Starting Worldland Seoul Mainnet...")
 		ctx.Set(utils.SeoulFlag.Name, strconv.FormatBool(true))
 	}
 	// If we're a full node on mainnet without --cache specified, bump default cache allowance
 	if ctx.String(utils.SyncModeFlag.Name) != "light" && !ctx.IsSet(utils.CacheFlag.Name) && !ctx.IsSet(utils.NetworkIdFlag.Name) {
 		// Make sure we're not on any supported preconfigured testnet either
-		if  !ctx.IsSet(utils.RopstenFlag.Name) &&
+		if !ctx.IsSet(utils.RopstenFlag.Name) &&
 			!ctx.IsSet(utils.SepoliaFlag.Name) &&
 			!ctx.IsSet(utils.RinkebyFlag.Name) &&
 			!ctx.IsSet(utils.GoerliFlag.Name) &&
